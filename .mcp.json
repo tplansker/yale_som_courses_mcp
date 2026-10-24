@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "yale-som-courses": {
-      "command": "/Users/tylerplansker/Desktop/YALE/AI FOUNDATIONS/LECTURE 9/yale_som_courses_mcp/mcp/.venv/bin/python",
+      "command": "mcp/.venv/bin/python",
       "args": [
-        "/Users/tylerplansker/Desktop/YALE/AI FOUNDATIONS/LECTURE 9/yale_som_courses_mcp/mcp/mcp_server.py"
+        "mcp/mcp_server.py"
       ]
     }
   }
