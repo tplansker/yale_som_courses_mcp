@@ -134,9 +134,9 @@ Your vibe coder launches that process — it needs the `mcp/.venv` packages (`fa
 
 For **Claude Code**, put that config in `.mcp.json` at the project root. Servers there load for this project only; Claude asks you to approve them the first time.
 
-### Outlook MCP server (read-only)
+### Outlook MCP server (send-only)
 
-`mcp/outlook/` adds a second server, `outlook`, registered in `.mcp.json` next to `yale-som-courses`. It reads a Yale Microsoft 365 mailbox through Microsoft Graph with read-only scopes (`User.Read`, `Mail.Read`, `Calendars.Read`). It cannot send, move, or delete anything.
+`mcp/outlook/` adds a second server, `outlook`, registered in `.mcp.json` next to `yale-som-courses`. It sends email from a Yale Microsoft 365 account through Microsoft Graph using one delegated scope, `Mail.Send`. It cannot read, move, or delete mail.
 
 ```
 mcp/
@@ -149,11 +149,11 @@ mcp/
     └── .token_cache.json   # created by --login; gitignored
 ```
 
-Tools: `whoami`, `list_recent_emails`, `search_emails`, `get_email`, `list_calendar_events`.
+Tool: `send_email(to, subject, body)` sends a plain-text message to one address and saves it to Sent Items.
 
 **Setup**
 
-1. Register an app in the [Microsoft Entra admin center](https://entra.microsoft.com) → App registrations → New registration. Choose "Accounts in any organizational directory", then under Authentication turn on **Allow public client flows**. Under API permissions add the delegated Microsoft Graph permissions `User.Read`, `Mail.Read`, and `Calendars.Read`. Yale may require IT to approve (grant admin consent for) the app before sign-in works.
+1. Register an app in the [Microsoft Entra admin center](https://entra.microsoft.com) → App registrations → New registration. Choose "Accounts in any organizational directory", then under Authentication turn on **Allow public client flows**. Under API permissions add the delegated Microsoft Graph permission `Mail.Send`. Yale may require IT to approve (grant admin consent for) the app before sign-in works.
 2. Add the app's IDs to `.env` (see `.env.example`). They are configuration, not secrets, but they still go in `.env`, never in `.mcp.json`:
 
    ```
