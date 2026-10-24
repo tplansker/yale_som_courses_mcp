@@ -7,3 +7,4 @@ node_modules/
 !data/yale_som.db
 .DS_Store
 output/audit_trail.json
+.token_cache.json

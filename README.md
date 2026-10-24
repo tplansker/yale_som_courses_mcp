@@ -134,28 +134,47 @@ Your vibe coder launches that process — it needs the `mcp/.venv` packages (`fa
 
 For **Claude Code**, put that config in `.mcp.json` at the project root. Servers there load for this project only; Claude asks you to approve them the first time.
 
-### Adding another MCP server (e.g. Outlook)
+### Outlook MCP server (read-only)
 
-Give each server its own folder and venv under `mcp/`, then add a second entry to `.mcp.json` next to `yale-som-courses`:
+`mcp/outlook/` adds a second server, `outlook`, registered in `.mcp.json` next to `yale-som-courses`. It reads a Yale Microsoft 365 mailbox through Microsoft Graph with read-only scopes (`User.Read`, `Mail.Read`, `Calendars.Read`). It cannot send, move, or delete anything.
 
 ```
 mcp/
-├── mcp_server.py      # yale-som-courses
+├── mcp_server.py           # yale-som-courses
 ├── .venv/
 └── outlook/
-    ├── outlook_server.py
+    ├── outlook_server.py   # outlook
     ├── requirements.txt
-    └── .venv/
+    ├── .venv/
+    └── .token_cache.json   # created by --login; gitignored
 ```
 
-```json
-"outlook": {
-  "command": "<project>/mcp/outlook/.venv/bin/python",
-  "args": ["<project>/mcp/outlook/outlook_server.py"]
-}
-```
+Tools: `whoami`, `list_recent_emails`, `search_emails`, `get_email`, `list_calendar_events`.
 
-Keep Outlook credentials in `.env`, never in `.mcp.json`.
+**Setup**
+
+1. Register an app in the [Microsoft Entra admin center](https://entra.microsoft.com) → App registrations → New registration. Choose "Accounts in any organizational directory", then under Authentication turn on **Allow public client flows**. Under API permissions add the delegated Microsoft Graph permissions `User.Read`, `Mail.Read`, and `Calendars.Read`. Yale may require IT to approve (grant admin consent for) the app before sign-in works.
+2. Add the app's IDs to `.env` (see `.env.example`). They are configuration, not secrets, but they still go in `.env`, never in `.mcp.json`:
+
+   ```
+   OUTLOOK_CLIENT_ID=<Application (client) ID>
+   OUTLOOK_TENANT_ID=<Directory (tenant) ID, or "organizations">
+   ```
+
+3. Create the venv and install (pause iCloud/Dropbox/OneDrive sync first):
+
+   ```bash
+   python3 -m venv mcp/outlook/.venv
+   mcp/outlook/.venv/bin/pip install -r mcp/outlook/requirements.txt
+   ```
+
+4. Sign in once from a terminal. It prints a code to enter at microsoft.com/devicelogin:
+
+   ```bash
+   mcp/outlook/.venv/bin/python mcp/outlook/outlook_server.py --login
+   ```
+
+5. Restart Claude Code in the project folder and approve `outlook`. `--logout` deletes the cached token.
 
 ### Optional: run the MCP server alone
 

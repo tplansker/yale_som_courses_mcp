@@ -5,6 +5,12 @@
       "args": [
         "mcp/mcp_server.py"
       ]
+    },
+    "outlook": {
+      "command": "mcp/outlook/.venv/bin/python",
+      "args": [
+        "mcp/outlook/outlook_server.py"
+      ]
     }
   }
 }
