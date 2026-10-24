@@ -11,6 +11,7 @@ HTTP URL:                      http://127.0.0.1:8001/mcp
 from __future__ import annotations
 
 import argparse
+import re
 import sqlite3
 from pathlib import Path
 
@@ -61,13 +62,18 @@ SUMMARY_COLUMNS = """
     faculty_1_email, course_session, daytimes AS day_time, room, units,
     course_description
 """
-SEARCH_COLUMNS = (
-    "course_number",
-    "course_title",
-    "faculty_1",
-    "course_category",
-    "course_description",
-)
+# Text fields the keyword search looks through, with a ranking weight each.
+SEARCH_FIELDS = {
+    "course_number": 3,
+    "course_title": 3,
+    "faculty_1": 3,
+    "course_description": 2,
+    "faculty_bio": 1,
+    "course_category": 1,
+    "course_type": 1,
+    "course_session": 1,
+    "room": 1,
+}
 SHORT_DESCRIPTION_CHARS = 280
 MAX_LIMIT = 50
 
@@ -100,44 +106,93 @@ def _no_spaces(text: str) -> str:
     return "".join(text.split()).upper()
 
 
+def _keyword_pattern(word: str) -> re.Pattern:
+    """Match a keyword at the start of a word, ignoring case.
+
+    Keywords of 3 letters or fewer must be a whole word (plural "s" allowed),
+    so "AI" finds "AI" and "AIs" but not "maintain" or "said". Longer
+    keywords also match longer words: "competitor" finds "competitors".
+    """
+    tail = r"s?\b" if len(word) <= 3 else ""
+    return re.compile(r"\b" + re.escape(word) + tail, re.IGNORECASE)
+
+
 @mcp.tool
 def search_courses(query: str, limit: int = 10) -> dict:
     """Keyword search over the Yale SOM course catalogue.
 
-    Every word in the query must appear in at least one of: course number,
-    title, faculty, category, or description (case-insensitive). Returns one
-    row per section with number, title, faculty, day/time, room, and a short
-    description. Use get_course for the full description of one course.
+    Give one or more keywords (e.g. "AI", "competitor", "statistics").
+    Checks the course number, title, professor name, course description,
+    professor bio, category, type, session, and room. With several keywords,
+    a course must match all of them. Returns one result per course, best
+    matches first, with its sections, a short description, and which fields
+    matched. Use get_course for the full description of one course.
     """
     limit = _clamp(limit, 10)
     words = [w for w in query.replace(",", " ").split() if w]
     if not words:
         return {"query": query, "count": 0, "results": [], "message": "Empty query."}
+    patterns = [_keyword_pattern(w) for w in words]
 
-    clauses, params = [], []
-    for word in words:
-        ors = [f"{col} LIKE ?" for col in SEARCH_COLUMNS]
-        ors.append("REPLACE(course_number, ' ', '') LIKE ?")
-        clauses.append("(" + " OR ".join(ors) + ")")
-        params += [f"%{word}%"] * len(SEARCH_COLUMNS) + [f"%{_no_spaces(word)}%"]
-
-    where = " AND ".join(clauses)
-    total = _query(f"SELECT COUNT(*) AS n FROM courses WHERE {where}", params)[0]["n"]
     rows = _query(
-        f"SELECT {SUMMARY_COLUMNS} FROM courses WHERE {where} "
-        "ORDER BY course_number, section LIMIT ?",
-        params + [limit],
+        f"SELECT {SUMMARY_COLUMNS}, faculty_bio, course_type FROM courses "
+        "ORDER BY course_number, section",
+        [],
     )
+    courses: dict[str, dict] = {}
+    for row in rows:
+        texts = {f: row.get(f) or "" for f in SEARCH_FIELDS}
+        compact_number = _no_spaces(texts["course_number"])
+        matched: set[str] = set()
+        for word, pattern in zip(words, patterns):
+            hits = {f for f, text in texts.items() if pattern.search(text)}
+            if _no_spaces(word) in compact_number and len(_no_spaces(word)) > 3:
+                hits.add("course_number")  # "MGT409" with no space
+            if not hits:
+                break
+            matched |= hits
+        else:
+            course = courses.setdefault(row["course_number"], {
+                "course_number": row["course_number"],
+                "course_title": row["course_title"],
+                "course_category": row["course_category"],
+                "units": row["units"],
+                "course_description": "",
+                "matched_fields": set(),
+                "sections": [],
+            })
+            if not course["course_description"]:
+                course["course_description"] = row["course_description"]
+            course["matched_fields"] |= matched
+            course["sections"].append({
+                "section": row["section"],
+                "faculty_1": row["faculty_1"],
+                "faculty_1_email": row["faculty_1_email"],
+                "course_session": row["course_session"],
+                "day_time": row["day_time"],
+                "room": row["room"],
+            })
+
+    for course in courses.values():
+        fields = course["matched_fields"]
+        course["score"] = sum(SEARCH_FIELDS[f] for f in fields)
+        course["matched_fields"] = sorted(fields, key=lambda f: -SEARCH_FIELDS[f])
+    ranked = sorted(courses.values(), key=lambda c: (-c.pop("score"), c["course_number"]))
+    results = [_shorten(c) for c in ranked[:limit]]
+
     result = {
         "query": query,
-        "count": len(rows),
-        "total_matches": total,
-        "results": [_shorten(r) for r in rows],
+        "count": len(results),
+        "total_matches": len(ranked),
+        "results": results,
     }
-    if not rows:
+    if not results:
         result["message"] = f"No courses in yale_som.db match {query!r}."
-    elif total > len(rows):
-        result["message"] = f"Showing {len(rows)} of {total} matches; refine the query."
+    elif len(ranked) > len(results):
+        result["message"] = (
+            f"Showing {len(results)} of {len(ranked)} matching courses; "
+            "raise limit or add a keyword to narrow it."
+        )
     return result
 
 
