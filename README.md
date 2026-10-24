@@ -132,6 +132,31 @@ Point the MCP config at the **mcp venv’s Python** and `mcp/mcp_server.py` (ful
 
 Your vibe coder launches that process — it needs the `mcp/.venv` packages (`fastmcp`). That is separate from running the web app.
 
+For **Claude Code**, put that config in `.mcp.json` at the project root. Servers there load for this project only; Claude asks you to approve them the first time.
+
+### Adding another MCP server (e.g. Outlook)
+
+Give each server its own folder and venv under `mcp/`, then add a second entry to `.mcp.json` next to `yale-som-courses`:
+
+```
+mcp/
+├── mcp_server.py      # yale-som-courses
+├── .venv/
+└── outlook/
+    ├── outlook_server.py
+    ├── requirements.txt
+    └── .venv/
+```
+
+```json
+"outlook": {
+  "command": "<project>/mcp/outlook/.venv/bin/python",
+  "args": ["<project>/mcp/outlook/outlook_server.py"]
+}
+```
+
+Keep Outlook credentials in `.env`, never in `.mcp.json`.
+
 ### Optional: run the MCP server alone
 
 ```powershell
